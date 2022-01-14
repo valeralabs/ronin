@@ -13,3 +13,4 @@ rocket = { version = "0.5.0-rc.1", features = ["json"] }
 blockstack-core = {  git = "https://github.com/syvita/stacks" }
 r2d2 = "0.8.9"
 r2d2_redis = "0.14.0"
+anyhow = "1.0.52"

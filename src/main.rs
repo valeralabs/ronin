@@ -3,6 +3,7 @@
 #[macro_use] extern crate rocket;
 extern crate figment;
 extern crate num_cpus;
+#[macro_use] extern crate anyhow;
 
 #[cfg(test)] mod tests;
 
@@ -17,7 +18,7 @@ fn hello() -> &'static str {
 fn main() {
     // Use Rocket's default `Figment`, but allow values from `MyApp.toml`
     // and `MY_APP_` prefixed environment variables to supersede its values.
-    use rocket::config::{Config, Environment};
+    use rocket::config::Config;
 
     let cpu_cores = num_cpus::get();
 
@@ -25,8 +26,8 @@ fn main() {
 
     // we want to share system resources between the API and the Events handler
     // events gets a single thread, and the API uses the rest
-    let api_workers = cpu_cores-1;
-    let event_workers = 1;
+    let api_workers: usize = cpu_cores - 1;
+    let event_workers: usize = 1;
     
     println!("Booting Ronin with {} API workers and {} event worker", api_workers, event_workers);
 
@@ -34,13 +35,10 @@ fn main() {
     let events_handler = std::thread::spawn(move || {
         // TODO: have profiles for dev, staging, prod
         // TODO: support custom profiles
-        let config = Config::build(Environment::Staging)
-            .address("0.0.0.0")
-            .port(3700)
-            .workers(event_workers)
-            //.ident("Ronin", true)
-            .finalize()
-            .unwrap();
+        let config = Config::figment()
+    		.merge(("address", "0.0.0.0"))
+			.merge(("port", 3700 as usize))
+			.merge(("workers", event_workers));
 
         rocket::custom(config)
             .mount("/", routes![hello])
@@ -48,15 +46,10 @@ fn main() {
     });
 
     // main thread for API
-    let config = Config::build(Environment::Staging)
-        // TODO: have profiles for dev, staging, prod
-        // TODO: support custom profiles
-        .address("0.0.0.0")
-        .port(3999)
-        .workers(api_workers.try_into().unwrap())
-        //.ident("Ronin", true)
-        .finalize()
-        .unwrap();
+    let config = Config::figment()
+		.merge(("address", "0.0.0.0"))
+		.merge(("port", 3999 as usize))
+		.merge(("workers", api_workers));
         
     use db::redis::pool;
 

@@ -1,9 +1,9 @@
 use rocket::http;
 use rocket::request;
-use rocket::outcome;
-use rocket::State;
+use rocket::outcome::{Outcome, Outcome::Success, Outcome::Failure, Outcome::Forward};
 use r2d2;
 use r2d2_redis::RedisConnectionManager;
+use anyhow::Error as AnyhowError;
 
 const REDIS_ADDRESS: &'static str = "redis://localhost:6379";
 
@@ -12,9 +12,12 @@ const REDIS_ADDRESS: &'static str = "redis://localhost:6379";
 // stores a db connection pool as a rocket managed state.
 pub fn pool() -> Pool {
     let manager = RedisConnectionManager::new(REDIS_ADDRESS).expect("connection manager");
-    let redis_config = Default::default();
-
-    r2d2::Pool::new(redis_config, manager).expect("db pool")
+	
+	let pool = r2d2::Pool::builder()
+		.build(manager)
+		.expect("db pool");
+			
+	Pool(pool)
 }
 
 // Rocket guard type: a wrapper around an r2d2 pool.
@@ -26,17 +29,18 @@ pub fn pool() -> Pool {
 pub struct RedisConnection(pub r2d2::PooledConnection<RedisConnectionManager>);
 
 // alias to the type for a pool of redis connections.
-type Pool = r2d2::Pool<RedisConnectionManager>;
+pub struct Pool(pub r2d2::Pool<RedisConnectionManager>);
 
 // retrieving a single connection from the database pool.
-impl<'a, 'r> request::FromRequest<'a, 'r> for RedisConnection {
-    type Error = ();
-
-    fn from_request(request: &'a request::Request<'r>) -> request::Outcome<RedisConnection, ()> {
-        let pool = request.guard::<State<Pool>>()?;
-        match pool.get() {
-            Ok(conn) => Outcome::Success(RedisConnection(conn)),
-            Err(_) => Outcome::Failure((http::Status::ServiceUnavailable, ())),
+#[rocket::async_trait]
+impl<'r> request::FromRequest<'r> for Pool {
+	type Error = AnyhowError;
+	
+    async fn from_request(request: &'r request::Request<'_>) -> request::Outcome<Pool, Self::Error> {
+        match request.guard::<Pool>().await {
+        	Success(pool) => Outcome::Success(pool),
+			Failure(error) => Outcome::Failure((http::Status::ServiceUnavailable, anyhow!(error.0))),
+			Forward(_) => Outcome::Failure((http::Status::ServiceUnavailable, anyhow!("forward (?)"))),
         }
     }
 }
