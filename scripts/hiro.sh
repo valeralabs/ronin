@@ -4,30 +4,29 @@ export MAINNET_ARCHIVE=https://docker.06815d71-a2bc-4176-98bb-dccd6c237f84.uk-lo
 
 echo "Updating APT..."
 
-apt-get update -qq
+sudo apt-get update -qq
 
 if [ -x "$(command -v docker)" ]; then
     echo "Docker is installed, skipping install..."
 else
     echo "Installing Docker..."
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
+    curl https://get.docker.com -sSf | sh
 fi
 
 if [ -x "$(command -v cargo)" ]; then
     echo "Cargo is installed, skipping install..."
 else
     echo "Installing Cargo..."
-    apt install -y cargo -qq
+    curl https://sh.rustup.rs -sSf | sh -s -- -y
+    source $HOME/.cargo/env
 fi
 
 echo "Installing JQ, PostgreSQL client & PV..."
 
-apt-get install postgresql-client-common jq pv -y -qq
+sudo apt-get install postgresql-client-common jq pv -y -qq
 
-echo "Installing b3sum..."
-cargo install b3sum -q
-export PATH=/root/.cargo/bin:$PATH
+echo "Installing b3sum, toml-cli & bottom..."
+cargo install b3sum toml-cli bottom
 
 VERSION=$(curl --silent https://api.github.com/repos/docker/compose/releases/latest | jq .name -r)
 echo "Installing Docker Compose $VERSION"
@@ -45,12 +44,12 @@ fi
 
 echo "Verifiying integrity..."
 
-export EXPECTED=56116b8c0175cf0f2d5acd9e1664b2edcde9bf256628524d99cd34d0b5c8e1c8
+export EXPECTED=a43298502be0f3ab5e8b2dfe76ed24c8826c00a7935f85db2392454e794d30fe
 
 if pv mainnet.tar.gz | b3sum --no-names | grep -q $EXPECTED; then 
-    echo "Integrity at 100%."
+    echo "Integrity verified."
 else
-    echo "Integrity at 0%. Removing archive. Please try again."
+    echo "Integrity failure. Removing archive. Please try again."
     rm mainnet.tar.gz
     exit 1
 fi

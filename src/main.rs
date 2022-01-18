@@ -15,7 +15,8 @@ fn hello() -> &'static str {
     "Hello, world!"
 }
 
-fn main() {
+#[rocket::main]
+async fn main() {
     // Use Rocket's default `Figment`, but allow values from `MyApp.toml`
     // and `MY_APP_` prefixed environment variables to supersede its values.
     use rocket::config::Config;
@@ -30,9 +31,10 @@ fn main() {
     let event_workers: usize = 1;
     
     println!("Booting Ronin with {} API workers and {} event worker", api_workers, event_workers);
+    
 
     // create thread for events handler
-    let events_handler = std::thread::spawn(move || {
+    let events_handler = std::thread::spawn( {
         // TODO: have profiles for dev, staging, prod
         // TODO: support custom profiles
         let config = Config::figment()
@@ -42,7 +44,8 @@ fn main() {
 
         rocket::custom(config)
             .mount("/", routes![hello])
-            .launch();
+            .launch()
+            .await;
     });
 
     // main thread for API
@@ -56,7 +59,8 @@ fn main() {
     rocket::custom(config)
         .mount("/", routes![hello])
         .manage(pool())
-        .launch();
+        .launch()
+        .await;
 
     // wait for eventsHandler to finish before exiting
     events_handler.join().unwrap();
