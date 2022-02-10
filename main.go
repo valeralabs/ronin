@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 	"github.com/gin-gonic/gin"
-	"gitlab.com/syvita/ronin/db"
+	"github.com/syvita/ronin/db"
 
 	//	"github.com/gin-gonic/autotls"
 	"log"
@@ -39,6 +39,8 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
+	// goroutines >>>>> anything else
+
 	g.Go(func() error {
 		return apiServer.ListenAndServe()
 	})
@@ -51,6 +53,8 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
+// these are identical rn but will be different obv
 
 func initApiRouter(database *db.Database) *gin.Engine {
 	r := gin.Default()
