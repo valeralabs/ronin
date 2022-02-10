@@ -1,23 +1,187 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
+	"github.com/gorilla/mux"
 	"github.com/syvita/ronin/db"
-	"os"
-	"time"
 
-	//	"github.com/gin-gonic/autotls"
-	"golang.org/x/sync/errgroup"
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 )
 
-var (
-	g         errgroup.Group
-	RedisAddr = "localhost:6379"
-)
+type ClientHandler struct {
+	Database *db.Database
+	Address  string
+}
 
-var logger = log.New(os.Stderr, "[MAIN]: ", log.Lshortfile)
+type EventHandler struct {
+	Database *db.Database
+	Address  string
+}
+
+type Object map[string]interface{}
+
+var RedisAddr = "localhost:6379"
+
+var logger = log.New(os.Stderr, "[MAIN]: ", log.Ldate|log.Ltime|log.Lshortfile)
+
+func send(writer http.ResponseWriter, body Object) {
+	err := json.NewEncoder(writer).Encode(body)
+
+	if err != nil {
+		writer.Write([]byte("failed to serialize error"))
+	}
+}
+
+//TODO: move this to a dedicated module
+func (handler ClientHandler) Start() {
+	logger := log.New(os.Stderr, "[CLIENT HANDLER]: ", log.Ldate|log.Ltime|log.Lshortfile)
+	router := mux.NewRouter()
+
+	router.HandleFunc("/points/{username}", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Add("Content-Type", "application/json")
+
+		username := mux.Vars(request)["example"]
+
+		logger.Printf("finding user \"%s\"\n", username)
+
+		if username == "" {
+			send(writer, Object{"error": "username is required"})
+			return
+		}
+
+		user, err := handler.Database.GetUser(username)
+
+		if err != nil {
+			if err == db.ErrNil {
+				writer.WriteHeader(404)
+				send(writer, Object{"error": "No record found for " + username})
+				return
+			}
+
+			writer.WriteHeader(500)
+			send(writer, Object{"error": "No record"})
+			return
+		}
+
+		writer.WriteHeader(200)
+		send(writer, Object{"user": user})
+	}).Methods("GET")
+
+	router.HandleFunc("/points", func(writer http.ResponseWriter, request *http.Request) {
+		body, err := ioutil.ReadAll(request.Body)
+
+		if err != nil {
+			writer.WriteHeader(500)
+			send(writer, Object{"error": "failed to read body"})
+			return
+		}
+
+		if len(body) == 0 {
+			writer.WriteHeader(400)
+			send(writer, Object{"error": "body is required"})
+			return
+		}
+
+		var user db.User
+
+		json.Unmarshal(body, &user)
+
+		err = handler.Database.SaveUser(&user)
+
+		if err != nil {
+			writer.WriteHeader(500)
+			send(writer, Object{"error": "failed to save user"})
+			return
+		}
+
+		logger.Println("storing user", user.Username)
+
+		send(writer, Object{"user": user})
+	}).Methods("POST")
+
+	err := http.ListenAndServe(handler.Address, router)
+
+	if err != nil {
+		panic(err)
+	}
+}
+
+//TODO: move this to a dedicated module
+func (handler EventHandler) Start() {
+	logger := log.New(os.Stderr, "[EVENT HANDLER]: ", log.Ldate|log.Ltime|log.Lshortfile)
+	router := mux.NewRouter()
+
+	router.HandleFunc("/points/{username}", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Add("Content-Type", "application/json")
+
+		username := mux.Vars(request)["example"]
+
+		logger.Printf("finding user \"%s\"\n", username)
+
+		if username == "" {
+			send(writer, Object{"error": "username is required"})
+			return
+		}
+
+		user, err := handler.Database.GetUser(username)
+
+		if err != nil {
+			if err == db.ErrNil {
+				writer.WriteHeader(404)
+				send(writer, Object{"error": "No record found for " + username})
+				return
+			}
+
+			writer.WriteHeader(500)
+			send(writer, Object{"error": "No record"})
+			return
+		}
+
+		writer.WriteHeader(200)
+		send(writer, Object{"user": user})
+	}).Methods("GET")
+
+	router.HandleFunc("/points", func(writer http.ResponseWriter, request *http.Request) {
+		body, err := ioutil.ReadAll(request.Body)
+
+		if err != nil {
+			writer.WriteHeader(500)
+			send(writer, Object{"error": "failed to read body"})
+			return
+		}
+
+		if len(body) == 0 {
+			writer.WriteHeader(400)
+			send(writer, Object{"error": "body is required"})
+			return
+		}
+
+		var user db.User
+
+		json.Unmarshal(body, &user)
+
+		err = handler.Database.SaveUser(&user)
+
+		if err != nil {
+			writer.WriteHeader(500)
+			send(writer, Object{"error": "failed to save user"})
+			return
+		}
+
+		logger.Println("storing user", user.Username)
+
+		send(writer, Object{"user": user})
+	}).Methods("POST")
+
+	err := http.ListenAndServe(handler.Address, router)
+
+	if err != nil {
+		panic(err)
+	}
+}
 
 func main() {
 	database, err := db.NewDatabase(RedisAddr)
@@ -28,124 +192,14 @@ func main() {
 
 	logger.Println("Connected to Redis successfully")
 
-	apiServer := &http.Server{
-		Addr:         ":3999",
-		Handler:      initApiRouter(database),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	eventServer := &http.Server{
-		Addr:         ":3700",
-		Handler:      initEventRouter(database),
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
+	client := ClientHandler{database, ":3999"}
+	event := EventHandler{database, ":3700"}
 
 	// goroutines >>>>> anything else
 
-	g.Go(func() error {
-		return apiServer.ListenAndServe()
-	})
+	go client.Start()
+	go event.Start()
 
-	g.Go(func() error {
-		return eventServer.ListenAndServe()
-	})
-
-	if err := g.Wait(); err != nil {
-		log.Fatal(err)
+	for {
 	}
-}
-
-// these are identical rn but will be different obv
-
-func initApiRouter(database *db.Database) *gin.Engine {
-	r := gin.Default()
-	r.GET("/points/:username", func(c *gin.Context) {
-		username := c.Param("username")
-		user, err := database.GetUser(username)
-		if err != nil {
-			if err == db.ErrNil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "No record found for " + username})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"user": user})
-	})
-
-	r.POST("/points", func(c *gin.Context) {
-		var userJson db.User
-		if err := c.ShouldBindJSON(&userJson); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		err := database.SaveUser(&userJson)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"user": userJson})
-	})
-
-	r.GET("/leaderboard", func(c *gin.Context) {
-		leaderboard, err := database.GetLeaderboard()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"leaderboard": leaderboard})
-	})
-
-	// we can add auto-TLS setup here on the API server boot if we want
-	// guessing this should be userconfigurable in some way or another
-	//log.Fatal(autotls.Run(r, "example1.com", "example2.com"))
-
-	return r
-}
-
-func initEventRouter(database *db.Database) *gin.Engine {
-	r := gin.Default()
-
-	r.GET("/points/:username", func(c *gin.Context) {
-		username := c.Param("username")
-		user, err := database.GetUser(username)
-		if err != nil {
-			if err == db.ErrNil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "No record found for " + username})
-				return
-			}
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"user": user})
-	})
-
-	r.POST("/points", func(c *gin.Context) {
-		var userJson db.User
-		if err := c.ShouldBindJSON(&userJson); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		err := database.SaveUser(&userJson)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"user": userJson})
-	})
-
-	r.GET("/leaderboard", func(c *gin.Context) {
-		leaderboard, err := database.GetLeaderboard()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"leaderboard": leaderboard})
-	})
-
-	//log.Fatal(autotls.Run(r, "example1.com", "example2.com"))
-
-	return r
 }
