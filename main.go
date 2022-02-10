@@ -119,6 +119,7 @@ func (handler EventHandler) Start() {
 
 	router.HandleFunc("/new_mempool_tx", func(writer http.ResponseWriter, request *http.Request) {
 		body, err := ioutil.ReadAll(request.Body)
+		writer.Header().Add("Content-Type", "application/json")
 
 		if err != nil {
 			writer.WriteHeader(500)
@@ -168,7 +169,7 @@ func (handler EventHandler) Start() {
 			return
 		}
 
-		send(writer, Object{"okay": true, "txids": txids})
+		send(writer, Object{"ok": true, "txids": txids})
 	}).Methods("POST")
 
 	err := http.ListenAndServe(handler.Address, router)
