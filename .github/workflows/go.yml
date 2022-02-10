@@ -1,4 +1,4 @@
-name: Rust
+name: Let's GO
 
 on:
   push:
@@ -17,9 +17,5 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: recursive
-    - name: Use Nightly
-      run: rustup default nightly
     - name: Build
-      run: cargo build
-    - name: Run tests
-      run: cargo test --verbose
+      run: go build

@@ -8,6 +8,3 @@
 // We deserialize the transactions and then use pipelining to add them to the DB.
 
 // =============================================================================
-
-use rocket::serde::json::{Json, Value, json};
-use rocket::serde::{Serialize, Deserialize};
