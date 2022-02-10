@@ -43,7 +43,7 @@ func (handler ClientHandler) Start() {
 	router.HandleFunc("/points/{username}", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Add("Content-Type", "application/json")
 
-		username := mux.Vars(request)["example"]
+		username := mux.Vars(request)["username"]
 
 		logger.Printf("finding user \"%s\"\n", username)
 
@@ -117,7 +117,7 @@ func (handler EventHandler) Start() {
 	router.HandleFunc("/points/{username}", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Add("Content-Type", "application/json")
 
-		username := mux.Vars(request)["example"]
+		username := mux.Vars(request)["username"]
 
 		logger.Printf("finding user \"%s\"\n", username)
 
