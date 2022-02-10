@@ -4,14 +4,17 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/syvita/ronin/db"
 
+	"encoding/hex"
 	"encoding/json"
+	"crypto/sha512"
+
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 )
 
-type ClientHandler struct {
+type ApiHandler struct {
 	Database *db.Database
 	Address  string
 }
@@ -36,8 +39,8 @@ func send(writer http.ResponseWriter, body Object) {
 }
 
 //TODO: move this to a dedicated module
-func (handler ClientHandler) Start() {
-	logger := log.New(os.Stderr, "[CLIENT HANDLER]: ", log.Ldate|log.Ltime|log.Lshortfile)
+func (handler ApiHandler) Start() {
+	logger := log.New(os.Stderr, "[API]: ", log.Ldate|log.Ltime|log.Lshortfile)
 	router := mux.NewRouter()
 
 	router.HandleFunc("/points/{username}", func(writer http.ResponseWriter, request *http.Request) {
@@ -111,40 +114,10 @@ func (handler ClientHandler) Start() {
 
 //TODO: move this to a dedicated module
 func (handler EventHandler) Start() {
-	logger := log.New(os.Stderr, "[EVENT HANDLER]: ", log.Ldate|log.Ltime|log.Lshortfile)
+	logger := log.New(os.Stderr, "[EVENT]: ", log.Ldate|log.Ltime|log.Lshortfile)
 	router := mux.NewRouter()
 
-	router.HandleFunc("/points/{username}", func(writer http.ResponseWriter, request *http.Request) {
-		writer.Header().Add("Content-Type", "application/json")
-
-		username := mux.Vars(request)["username"]
-
-		logger.Printf("finding user \"%s\"\n", username)
-
-		if username == "" {
-			send(writer, Object{"error": "username is required"})
-			return
-		}
-
-		user, err := handler.Database.GetUser(username)
-
-		if err != nil {
-			if err == db.ErrNil {
-				writer.WriteHeader(404)
-				send(writer, Object{"error": "No record found for " + username})
-				return
-			}
-
-			writer.WriteHeader(500)
-			send(writer, Object{"error": "No record"})
-			return
-		}
-
-		writer.WriteHeader(200)
-		send(writer, Object{"user": user})
-	}).Methods("GET")
-
-	router.HandleFunc("/points", func(writer http.ResponseWriter, request *http.Request) {
+	router.HandleFunc("/new_mempool_tx", func(writer http.ResponseWriter, request *http.Request) {
 		body, err := ioutil.ReadAll(request.Body)
 
 		if err != nil {
@@ -160,18 +133,38 @@ func (handler EventHandler) Start() {
 		}
 
 		var user db.User
+		var stringTxs []string
+		var txs [][]byte
 
-		json.Unmarshal(body, &user)
+		json.Unmarshal(body, &stringTxs)
 
-		err = handler.Database.SaveUser(&user)
+		// remove `0x` prefix from each tx string and decode to hex with hex.DecodeString
+		for _, tx := range stringTxs {
+			hex, err := hex.DecodeString(tx[2:])
+
+			if err != nil {
+				writer.WriteHeader(500)
+				send(writer, Object{"error": "failed to decode tx"})
+				return
+			}
+
+			txs = append(txs, hex)
+		}
+
+		// log hex-encoded txs using hex.EncodeToString(tx)
+		// here we'd probably do something with the txs
+		for _, tx := range txs {
+			sum := sha512.Sum512_256(tx)
+			txid := hex.EncodeToString(sum[:])
+			logger.Println("new mempool tx:", hex.EncodeToString(tx))
+			logger.Println("mempool txid:", txid)
+		}
 
 		if err != nil {
 			writer.WriteHeader(500)
-			send(writer, Object{"error": "failed to save user"})
+			send(writer, Object{"error": "failed to handle new mempool txs"})
 			return
 		}
-
-		logger.Println("storing user", user.Username)
 
 		send(writer, Object{"user": user})
 	}).Methods("POST")
@@ -192,7 +185,7 @@ func main() {
 
 	logger.Println("Connected to Redis successfully")
 
-	client := ClientHandler{database, ":3999"}
+	client := ApiHandler{database, ":3999"}
 	event := EventHandler{database, ":3700"}
 
 	// goroutines >>>>> anything else
