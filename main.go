@@ -1,29 +1,32 @@
 package main
 
 import (
-	"fmt"
-	"time"
 	"github.com/gin-gonic/gin"
 	"github.com/syvita/ronin/db"
+	"os"
+	"time"
 
 	//	"github.com/gin-gonic/autotls"
+	"golang.org/x/sync/errgroup"
 	"log"
 	"net/http"
-	"golang.org/x/sync/errgroup"
 )
 
 var (
-	g errgroup.Group
+	g         errgroup.Group
 	RedisAddr = "localhost:6379"
 )
+
+var logger = log.New(os.Stderr, "[MAIN]: ", log.Lshortfile)
+
 func main() {
 	database, err := db.NewDatabase(RedisAddr)
 
 	if err != nil {
-		log.Fatalf("Failed to connect to redis: %s", err.Error())
-	} else {
-		fmt.Println("Connected to Redis successfully")
+		logger.Fatalf("Failed to connect to redis: %s", err.Error())
 	}
+
+	logger.Println("Connected to Redis successfully")
 
 	apiServer := &http.Server{
 		Addr:         ":3999",
@@ -58,7 +61,7 @@ func main() {
 
 func initApiRouter(database *db.Database) *gin.Engine {
 	r := gin.Default()
-	r.GET("/points/:username", func (c *gin.Context) {
+	r.GET("/points/:username", func(c *gin.Context) {
 		username := c.Param("username")
 		user, err := database.GetUser(username)
 		if err != nil {
@@ -72,7 +75,7 @@ func initApiRouter(database *db.Database) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"user": user})
 	})
 
-	r.POST("/points", func (c *gin.Context) {
+	r.POST("/points", func(c *gin.Context) {
 		var userJson db.User
 		if err := c.ShouldBindJSON(&userJson); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -104,7 +107,8 @@ func initApiRouter(database *db.Database) *gin.Engine {
 
 func initEventRouter(database *db.Database) *gin.Engine {
 	r := gin.Default()
-	r.GET("/points/:username", func (c *gin.Context) {
+
+	r.GET("/points/:username", func(c *gin.Context) {
 		username := c.Param("username")
 		user, err := database.GetUser(username)
 		if err != nil {
@@ -118,7 +122,7 @@ func initEventRouter(database *db.Database) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"user": user})
 	})
 
-	r.POST("/points", func (c *gin.Context) {
+	r.POST("/points", func(c *gin.Context) {
 		var userJson db.User
 		if err := c.ShouldBindJSON(&userJson); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
