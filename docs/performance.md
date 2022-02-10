@@ -1,7 +1,7 @@
 # Performance
 
 RONIN is designed to have very little real performance limits. It's built in
-Rust which is compiled to native machine code (no JIT compilation like JS/TS)
+Go which is compiled to native machine code (no JIT compilation like JS/TS)
 and uses an in-memory datastore (Redis) for the majority of its data requests.
 
 For example, using 10KB blobs, my M1 Max MacBook gets the following results for

@@ -1,6 +1,6 @@
 # Ronin
 
-[![Rust](https://github.com/syvita/ronin/actions/workflows/rust.yml/badge.svg)](https://github.com/syvita/ronin/actions/workflows/rust.yml)
+[![Go](https://github.com/syvita/ronin/actions/workflows/go.yml/badge.svg)](https://github.com/syvita/ronin/actions/workflows/go.yml)
 
 Hello there!
 
@@ -20,7 +20,7 @@ Simple stuff: Ronin will use the event dispatcher from a Stacks node to hydrate 
 
 ![Smug face](./repo-img/smug.gif)
 
-- Built in Rust
+- Built in Go
 - Uses Redis as primary datastore (which will fill up all of that juicy RAM of yours)
 - Uses the Rocket web framework for *speeeeed*
 - Sometimes you won't be able to run it entirely in memory because some people don't have enough RAM to store an entire blockchain in it (what are you doing???).
