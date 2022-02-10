@@ -132,15 +132,15 @@ func (handler EventHandler) Start() {
 			return
 		}
 
-		var user db.User
 		var stringTxs []string
 		var txs [][]byte
+		var txids []string
 
 		json.Unmarshal(body, &stringTxs)
 
 		// remove `0x` prefix from each tx string and decode to hex with hex.DecodeString
 		for _, tx := range stringTxs {
-			hex, err := hex.DecodeString(tx[2:])
+			rawTx, err := hex.DecodeString(tx[2:])
 
 			if err != nil {
 				writer.WriteHeader(500)
@@ -148,7 +148,9 @@ func (handler EventHandler) Start() {
 				return
 			}
 
-			txs = append(txs, hex)
+			txs = append(txs, rawTx)
+			sum := sha512.Sum512_256(rawTx)
+			txids = append(txids, hex.EncodeToString(sum[:]))
 		}
 
 		// log hex-encoded txs using hex.EncodeToString(tx)
@@ -156,8 +158,8 @@ func (handler EventHandler) Start() {
 		for _, tx := range txs {
 			sum := sha512.Sum512_256(tx)
 			txid := hex.EncodeToString(sum[:])
-			logger.Println("new mempool tx:", hex.EncodeToString(tx))
-			logger.Println("mempool txid:", txid)
+			//logger.Println("new mempool tx:", hex.EncodeToString(tx))
+			logger.Println("new mempool tx processed:", txid)
 		}
 
 		if err != nil {
@@ -166,7 +168,7 @@ func (handler EventHandler) Start() {
 			return
 		}
 
-		send(writer, Object{"user": user})
+		send(writer, Object{"okay": true, "txids": txids})
 	}).Methods("POST")
 
 	err := http.ListenAndServe(handler.Address, router)
