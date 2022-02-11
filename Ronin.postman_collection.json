@@ -1,6 +1,6 @@
 {
 	"info": {
-		"_postman_id": "cbc9685e-1746-4817-b9fc-f068c9e6f3f4",
+		"_postman_id": "4d98b9ce-0b0e-4601-a935-1f81f447f65c",
 		"name": "Ronin",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
@@ -63,7 +63,27 @@
 		},
 		{
 			"name": "API",
-			"item": []
+			"item": [
+				{
+					"name": "status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://{{host}}:3999/status",
+							"protocol": "http",
+							"host": [
+								"{{host}}"
+							],
+							"port": "3999",
+							"path": [
+								"status"
+							]
+						}
+					},
+					"response": []
+				}
+			]
 		}
 	],
 	"variable": [
