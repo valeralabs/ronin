@@ -29,7 +29,7 @@ func main() {
 	// goroutines >>>>> anything else
 
 	go api.Listen(":3999")
-	go events.Listen(":3700")
+	go events.Listen("127.0.0.1:3700")
 
 	for {
 	}
